@@ -1,4 +1,5 @@
 import requests
+#import redis
 import json
 from datetime import datetime
 import time
@@ -9,6 +10,7 @@ import errno
 # Use your own API key, from https://www.bungie.net/en/Application
 API_KEY = 'YOUR_API_KEY_HERE'
 BUNGIE_API_KEY = os.getenv('API_KEY') or API_KEY
+
 
 # URL list:
 URL_LIST = {
@@ -97,16 +99,19 @@ def get_json_manifest(manifest_url):
 def split_manifest(manifest_json):
 	""" Take the JSON Manifest file and writes a new JSON file for each key """
 
-	key_list = []
+	key_list = manifest_json.keys()
 
-	for key in manifest_json.keys():
-		key_list.append(key)
+	for key in key_list:
+		print(key)
+		for definition_key, definition_value in manifest_json[key].items():
+			print(definition_key)
+			print(definition_value)
 	
 	print("\t-I- Found", len(key_list), "definitions.")
 
-	for current_key in key_list:		
-		file_name = os.path.join(FILE_LIST['SPLIT_DIR'], current_key + ".json")
-		write_json_file(file_name, manifest_json[current_key])
+	# for current_key in key_list:		
+	# 	file_name = os.path.join(FILE_LIST['SPLIT_DIR'], current_key + ".json")
+	# 	write_json_file(file_name, manifest_json[current_key])
 
 	return True
 
