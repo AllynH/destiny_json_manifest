@@ -3,6 +3,7 @@ import json
 from datetime import datetime
 import time
 import os
+import sys
 import errno
 
 # Use your own API key, from https://www.bungie.net/en/Application
@@ -39,18 +40,15 @@ def get_manifest_version():
 	# print(manifest_info.text)
 	# print(manifest_info.encoding)
 
-	# Convert text to JSON as it can be displayed very neatly:
-	manifest_info_json = json.loads(manifest_info.text)
-
-	if not manifest_info.status_code == 200:
+	if not manifest_info.status_code == 200 or manifest_info.json()["ErrorCode"] == 2101:
 		print("\t-E- Bungie returned an error")
 		print(manifest_info.status_code)
 		print(manifest_info.text)
 		return "Error"
 	else:
 		print("\t-I- Successfully recieved the Manifest version information!")
-
-
+		# Convert text to JSON as it can be displayed very neatly:
+		manifest_info_json = json.loads(manifest_info.text)
 
 	# Print the info to a file:
 	write_json_file(FILE_LIST['MANIFEST_VERSION'], manifest_info_json)
@@ -89,7 +87,7 @@ def get_json_manifest(manifest_url):
 
 	# Print the info to a file:
 	print("\t-I- Wrting Manifest file!")
-	write_json_file(FILE_LIST['MANIFEST'], manifest_response.json())
+	#write_json_file(FILE_LIST['MANIFEST'], manifest_response.json())
 
 	print("\t-I- Writing separate manifest files!")
 	split_manifest(manifest_response.json())
@@ -143,8 +141,11 @@ if __name__ == "__main__":
 	manifest_version = get_manifest_version()
 
 	if manifest_version != "Error":
+		# print(manifest_version)
 		manifest_url = URL_LIST['BUNGIE_BASE_URL'] + manifest_version['Response']['jsonWorldContentPaths']['en']
 		print("\t-I- Manifest version:", manifest_version['Response']['jsonWorldContentPaths']['en'])
+	else:
+		sys.exit()
 
 	# Dummy function that always returns True, you can modify for your own needs:
 	manifest_changed_status = check_manifest_version()

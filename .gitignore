@@ -1,3 +1,9 @@
+# Project:
+/split_json
+manifest.json
+manifest_version.json
+.vscode
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
