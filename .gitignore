@@ -3,6 +3,7 @@
 manifest.json
 manifest_version.json
 .vscode
+dump.rdb
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

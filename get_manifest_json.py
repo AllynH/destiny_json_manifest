@@ -1,16 +1,17 @@
 import requests
-#import redis
+import redis
 import json
 from datetime import datetime
 import time
 import os
 import sys
 import errno
+from urllib.parse import urlparse
+from redis_functions import *
 
 # Use your own API key, from https://www.bungie.net/en/Application
 API_KEY = 'YOUR_API_KEY_HERE'
 BUNGIE_API_KEY = os.getenv('API_KEY') or API_KEY
-
 
 # URL list:
 URL_LIST = {
@@ -34,9 +35,41 @@ HEADERS = {
 	'Content-Encoding'		: 'gzip'
 }
 
+# Setup Redis:
+if os.environ.get('REDIS_URL'):
+	REDIS_HOST = os.environ.get('REDIS_HOST')
+	REDIS_PASSWORD = os.environ.get('REDIS_PASSWORD')
+	REDIS_PORT = os.environ.get('REDIS_PORT')
+	REDIS_URI = os.environ.get('REDIS_URI')
+	REDIS_URL = os.environ.get('REDIS_URL')
+	redis_url = urlparse(REDIS_URL)
+	redis_db = redis.StrictRedis(host=redis_url.hostname, port=redis_url.port, db=2, password=redis_url.password, charset='utf-8', decode_responses=True)
+else:
+	redis_db = redis.StrictRedis(host='localhost', port=6379, db=2, charset='utf-8', decode_responses=True)
+
+def connect_redis():
+	""" 
+		Connect to the Redis server.
+		Test the connection
+		The following options return a String object instead of a byte stream:
+		return charset=utf-8
+		decode_response=True
+	"""
+	# Test the Redis connection:
+	try: 
+		redis_db.ping()
+		print("\t-I- Redis is connected.")
+		return True
+	except redis.ConnectionError:
+		print("\t-E- Redis connection error!")
+		return False
+
+	# This should be unreachable:
+	return False 
+
 def get_manifest_version():
 	""" Send the request to Bungie for the Manifest version information: """
-	print("\t-I- Requesting Manifest!")
+	print("\t-I- Requesting Manifest.")
 	manifest_info = requests.get(URL_LIST['DESTINY_MANIFEST_URL'], headers=HEADERS)
 	# print(manifest_info.status_code)
 	# print(manifest_info.text)
@@ -57,12 +90,26 @@ def get_manifest_version():
 
 	return manifest_info_json
 
-def check_manifest_version():
+def check_manifest_version(manifest_version, db_revision):
 	""" 
 		Check if the Manifest has been updated from the stored version.
 		DestinyVaultRaider.com stores a cache in Redis, so I'll put the code to compare both versions here.
 		Implement how you see fit.
 	"""
+
+	revision_key = "D2:" + db_revision + ":version"
+
+	manifest_version = manifest_version['Response']['jsonWorldContentPaths']['en']
+
+	if redis_db.get(revision_key) is None:
+		return True
+
+	redis_version = json.loads(redis_db.get(revision_key))
+	redis_version = redis_version['Response']['jsonWorldContentPaths']['en']
+
+	if redis_version == manifest_version:
+		print("\t-I- No difference between stored Manifest and downloaded version.")
+		return False
 
 	return True
 
@@ -70,7 +117,7 @@ def get_json_manifest(manifest_url):
 	""" 
 	Make the HTTP request to Bungie for the JSON Manifest.
 	"""
-	print("\t-I- Requesting JSON Manifest!")
+	print("\t-I- Requesting JSON Manifest.")
 	manifest_response = requests.get(manifest_url, headers=HEADERS)
 	
 	# Some useful debug print statements:
@@ -87,11 +134,11 @@ def get_json_manifest(manifest_url):
 		print(manifest_response.text)
 		return "Error"
 
-	# Print the info to a file:
-	print("\t-I- Wrting Manifest file!")
-	#write_json_file(FILE_LIST['MANIFEST'], manifest_response.json())
+	# Print the info to a file - disabled as it causes memory errors:
+	# print("\t-I- Wrting Manifest file.")
+	# write_json_file(FILE_LIST['MANIFEST'], manifest_response.json())
 
-	print("\t-I- Writing separate manifest files!")
+	print("\t-I- Writing separate manifest files to Redis")
 	split_manifest(manifest_response.json())
 
 	return manifest_response.json()
@@ -102,10 +149,11 @@ def split_manifest(manifest_json):
 	key_list = manifest_json.keys()
 
 	for key in key_list:
-		print(key)
+		print("\t\t-I-", key)
 		for definition_key, definition_value in manifest_json[key].items():
-			print(definition_key)
-			print(definition_value)
+			redis_db.set("D2:0:" + str(key) + ":" + str(definition_key), json.dumps(definition_value))	
+			# print(definition_key)
+			# print(definition_value)
 	
 	print("\t-I- Found", len(key_list), "definitions.")
 
@@ -137,14 +185,22 @@ def write_json_file(file_name, write_json):
 	return True
 
 if __name__ == "__main__":
-	print("\t-I- This is the main function!")
+	print("\t-I- This is the main function.")
 
 	# Initialise some values:
 	manifest_changed_status = False
 
-	start_time = time.time()
-	manifest_version = get_manifest_version()
+	# Redis variables:
+	db_revision = None
+	revision_key = "D2:metadata:revision"
 
+	start_time = time.time()
+	redis_status = connect_redis()
+	if not redis_status:
+		print("\t-E- Redis connection error, exiting!")
+		sys.exit()
+
+	manifest_version = get_manifest_version()
 	if manifest_version != "Error":
 		# print(manifest_version)
 		manifest_url = URL_LIST['BUNGIE_BASE_URL'] + manifest_version['Response']['jsonWorldContentPaths']['en']
@@ -152,8 +208,27 @@ if __name__ == "__main__":
 	else:
 		sys.exit()
 
-	# Dummy function that always returns True, you can modify for your own needs:
-	manifest_changed_status = check_manifest_version()
+
+
+	db_revision = redis_db.get(revision_key)
+	if not db_revision or db_revision is None:
+		print("\t-I- Creating Redis database structure.")	
+		create_database(redis_db)
+		# I've updated db_revision - grab it again:
+		db_revision = redis_db.get(revision_key)
+		print("\t-I- Current revision is:", db_revision)
+	else:
+		print("\t-I- Current revision is:", db_revision)
+	
+	# Temporarily set to False, this will flag any incomplete updates. 
+	redis_db.set("D2:" + "metadata:successful", "False")
+
+	# Check to see if the stored manifest version matches the downloaded version:
+	manifest_changed_status = check_manifest_version(manifest_version, db_revision)
+
+	redis_manifest_version = "D2:" + db_revision + ":version"
+	redis_db.set(redis_manifest_version, json.dumps(manifest_version))
+	set_metadata(redis_db, db_revision)
 
 	if manifest_changed_status:
 		# Create the directory if it doesn't exist:
@@ -163,3 +238,6 @@ if __name__ == "__main__":
 
 	end_time = time.time() - start_time
 	print("-I- Run time:", end_time, "seconds")
+
+	# Here is an example of printing an item hash:
+	# print(redis_db.get("D2:0:DestinyInventoryItemDefinition:347366834"))

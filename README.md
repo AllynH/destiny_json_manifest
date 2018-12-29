@@ -22,6 +22,9 @@ python get_manifest_json.py
 2. Writes this data to a file called: "manifest_version.json"
 3. Uses the URL received from the response to grab the actual JSON formatted Manifest.
 4. Sends a request for the Destiny 2 Manifest.
-5. Writes this data to a file called: "manifest.json"
-6. Parses the Manifest and splits each definition into a seperate file.
-7. Writes all of these files in the directory "./split_json"  
+5. Parses the Manifest and splits each definition into a seperate file.
+6. Parses each definition at a time.
+7. Stores each hash into the Redis database.
+
+## Database structure: ##
+[[./images/Database_structure.png|alt=Redis_database_structure]]
