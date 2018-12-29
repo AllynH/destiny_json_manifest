@@ -27,4 +27,4 @@ python get_manifest_json.py
 7. Stores each hash into the Redis database.
 
 ## Database structure: ##
-[[./images/Database_structure.png|alt=Redis_database_structure]]
+[[https://github.com/AllynH/destiny_json_manifest/blob/master/images/Database_structure.png|alt=Redis_database_structure]]
