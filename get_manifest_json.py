@@ -108,7 +108,7 @@ def check_manifest_version(manifest_version, db_revision):
 	redis_version = redis_version['Response']['jsonWorldContentPaths']['en']
 
 	if redis_version == manifest_version:
-		print("\t-I- No difference between stored Manifest and downloaded version.")
+		print("\t-I- No difference between stored Manifest and downloaded version!")
 		return False
 
 	return True
@@ -184,6 +184,23 @@ def write_json_file(file_name, write_json):
 
 	return True
 
+def get_definition(definition, def_hash):
+	""" 
+	Function to find a given definition, return the JSON response: 
+	The Last Word: 1364093401
+	"""
+
+	revision_key = "D2:metadata:revision"
+	db_revision = redis_db.get(revision_key)
+	db_namespace = "D2:" + str(db_revision) + ":" + str(definition) + ":" + str(def_hash)
+
+	try:
+		definition = json.loads(redis_db.get(db_namespace))
+	except TypeError:
+		definition = {}
+
+	return definition
+
 if __name__ == "__main__":
 	print("\t-I- This is the main function.")
 
@@ -207,8 +224,6 @@ if __name__ == "__main__":
 		print("\t-I- Manifest version:", manifest_version['Response']['jsonWorldContentPaths']['en'])
 	else:
 		sys.exit()
-
-
 
 	db_revision = redis_db.get(revision_key)
 	if not db_revision or db_revision is None:
@@ -239,5 +254,14 @@ if __name__ == "__main__":
 	end_time = time.time() - start_time
 	print("-I- Run time:", end_time, "seconds")
 
-	# Here is an example of printing an item hash:
-	# print(redis_db.get("D2:0:DestinyInventoryItemDefinition:347366834"))
+	my_def = get_definition("DestinyInventoryItemDefinition", "1364093401")
+	print(my_def.get('displayProperties', None))
+
+	my_def = get_definition("DestinyInventoryItemDefinition", "347366834")
+	print(my_def.get('displayProperties', None))
+
+	my_def = get_definition("DestinyClassDefinition", "2271682572")
+	print(my_def.get('displayProperties', None))
+
+	my_def = get_definition("DestinyMilestoneDefinition", "1300394968")
+	print(my_def.get('displayProperties', None))
